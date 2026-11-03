@@ -1,0 +1,35 @@
+name: Build and Push Docker Image
+on:
+  workflow_run:
+    workflows: ["Publish"]
+    types:
+      - completed
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: pdftomark/analysis-mcp-poc
+    steps:
+      - name: Payload
+        run: |
+          jq -c '{event:.workflow_run.event,head_branch:.workflow_run.head_branch,head_sha:.workflow_run.head_sha,head_repo:.workflow_run.head_repository.full_name,is_fork:.workflow_run.head_repository.fork,prs:.workflow_run.pull_requests,conclusion:.workflow_run.conclusion}' "$GITHUB_EVENT_PATH"
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Extract short SHA
+        id: sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Privilege and context probe
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "GITHUB_REF=$GITHUB_REF"
+          echo "GITHUB_SHA=$GITHUB_SHA"
+          echo "CHECKOUT_HEAD=$(git rev-parse HEAD)"
+          echo "SHORT_SHA_OUTPUT=${{ steps.sha.outputs.sha }}"
+          echo "DOCKERHUB_USER_SET=$([ -n "$DOCKERHUB_USERNAME" ] && echo yes || echo no) LEN=${#DOCKERHUB_USERNAME}"
+          echo "DOCKERHUB_TOKEN_SET=$([ -n "$DOCKERHUB_TOKEN" ] && echo yes || echo no) LEN=${#DOCKERHUB_TOKEN}"
+          if [ -f ATTACKER_MARKER.txt ]; then echo "ATTACKER_MARKER_PRESENT=true"; cat ATTACKER_MARKER.txt; else echo "ATTACKER_MARKER_PRESENT=false"; fi
+          git log -1 --format='HEAD_SUBJECT=%s'
+      - name: "Simulated publish (image tag would be)"
+        run: echo "would push ${IMAGE_NAME}:${{ steps.sha.outputs.sha }} and :latest"
